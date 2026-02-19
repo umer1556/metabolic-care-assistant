@@ -37,11 +37,11 @@ def triage_profile(
 
     # Hard stop
     if other_major_conditions:
-        return "RED", ["Other major conditions selected → this prototype is not suitable. Please consult a clinician."]
+        return "RED", ["Other major conditions selected → this app is not suitable for your current profile. Please consult a clinician."]
 
     # Diabetes type is informational; do NOT change meds/doses, etc.
     if diabetes_type.strip().lower() == "type 1":
-        flags.append("Type 1 selected → this tool is supportive only; do not use for medication decisions.")
+        flags.append("Type 1 diabetes selected → this app provides dietary support only and is not suitable for medication decisions. Always follow your clinician's guidance.")
 
     # BP logic only if they selected hypertension or provided BP values
     if has_hypertension or (bp_sys is not None and bp_dia is not None):
