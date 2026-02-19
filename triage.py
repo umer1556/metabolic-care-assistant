@@ -3,15 +3,18 @@ from typing import List, Optional, Tuple
 import math
 from config import TRIAGE
 
+
 def _mean(xs: List[float]) -> float:
     return sum(xs) / max(len(xs), 1)
+
 
 def _std(xs: List[float]) -> float:
     if len(xs) < 2:
         return 0.0
-    m = _mean(xs)
+    m   = _mean(xs)
     var = sum((x - m) ** 2 for x in xs) / (len(xs) - 1)
     return math.sqrt(var)
+
 
 def triage_profile(
     diabetes_type: str,
@@ -75,19 +78,16 @@ def triage_profile(
         elif a1c > TRIAGE["a1c_goal"]:
             flags.append("HbA1c slightly above common target → focus on consistency and follow-up.")
     else:
-        # Use fasting readings list if present
         fr = [x for x in fasting_readings if x is not None and x > 0]
         if len(fr) >= 1:
-            # Red flags on extremes
             if any(x >= TRIAGE["very_high"] for x in fr):
                 return "RED", ["Very high fasting glucose recorded → seek medical advice, especially if unwell."]
             if any(x < TRIAGE["hypo"] for x in fr):
                 level = "AMBER"
                 flags.append("Low fasting glucose detected → be cautious and discuss with clinician.")
 
-            # Variability flags (2–3 days)
             if len(fr) >= 2:
-                sd = _std(fr)
+                sd  = _std(fr)
                 rng = max(fr) - min(fr)
                 if rng >= TRIAGE["fasting_range_red"] or sd >= TRIAGE["fasting_std_red"]:
                     return "RED", ["Large variation in recent fasting readings → clinician evaluation recommended."]
@@ -95,7 +95,6 @@ def triage_profile(
                     level = "AMBER"
                     flags.append("Recent fasting readings show variability or are above typical range → proceed with caution.")
         else:
-            # No A1c and no fasting readings
             flags.append("No A1c or recent fasting readings provided → proceed with caution.")
             level = "AMBER"
 
