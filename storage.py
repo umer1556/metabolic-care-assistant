@@ -1,5 +1,6 @@
 # storage.py
 import os
+import re
 import json
 from datetime import datetime, date
 from typing import List, Tuple, Optional, Dict
@@ -21,16 +22,47 @@ def _get_db_url() -> str:
             pass
     return url
 
+def _clean_db_url(url: str) -> str:
+    """
+    Fix Supabase pooler URLs for psycopg3 compatibility:
+    1. Remove unsupported ?pgbouncer=true (and any &pgbouncer=...) parameter.
+    2. Ensure the scheme is postgresql+psycopg:// so SQLAlchemy uses psycopg3.
+       (Falls back gracefully if psycopg3 is not installed.)
+    """
+    if not url:
+        return url
+
+    # Strip pgbouncer query param
+    url = re.sub(r"[?&]pgbouncer=[^&]*", "", url)
+    # Clean up trailing ? or & left behind
+    url = re.sub(r"\?$", "", url)
+
+    # Normalise postgres:// -> postgresql://
+    url = re.sub(r"^postgres://", "postgresql://", url)
+
+    # Try to use psycopg3 driver; fall back to psycopg2 scheme if unavailable
+    try:
+        import psycopg  # psycopg3
+        # Switch scheme to postgresql+psycopg so SQLAlchemy picks psycopg3
+        url = re.sub(r"^postgresql(\+psycopg2)?://", "postgresql+psycopg://", url)
+    except ImportError:
+        pass  # leave scheme as-is; SQLAlchemy will use psycopg2
+
+    return url
+
 _engine = None
 
 def get_engine():
     global _engine
     if _engine is None:
-        db_url = _get_db_url()
+        db_url = _clean_db_url(_get_db_url())
         if db_url:
             _engine = create_engine(db_url, pool_pre_ping=True, poolclass=NullPool)
         else:
-            _engine = create_engine("sqlite:///data.db", connect_args={"check_same_thread": False})
+            _engine = create_engine(
+                "sqlite:///data.db",
+                connect_args={"check_same_thread": False}
+            )
     return _engine
 
 metadata = MetaData()
@@ -123,7 +155,13 @@ def upsert_profile(user_key: str, data: Dict) -> None:
             payload["created_at"] = now
             conn.execute(insert(profiles).values(**payload))
 
-def add_glucose_log(user_key: str, measured_at: datetime, reading_type: str, value: float, meal_note: str = "") -> None:
+def add_glucose_log(
+    user_key: str,
+    measured_at: datetime,
+    reading_type: str,
+    value: float,
+    meal_note: str = "",
+) -> None:
     with get_engine().begin() as conn:
         conn.execute(insert(glucose_logs).values(
             user_key=user_key,
@@ -131,7 +169,7 @@ def add_glucose_log(user_key: str, measured_at: datetime, reading_type: str, val
             logged_at=datetime.now(),
             reading_type=reading_type,
             value=float(value),
-            meal_note=meal_note or None
+            meal_note=meal_note or None,
         ))
 
 def fetch_glucose_logs(user_key: str) -> List[Tuple[str, str, float, str]]:
@@ -141,19 +179,26 @@ def fetch_glucose_logs(user_key: str) -> List[Tuple[str, str, float, str]]:
                 glucose_logs.c.measured_at,
                 glucose_logs.c.reading_type,
                 glucose_logs.c.value,
-                glucose_logs.c.meal_note
-            ).where(glucose_logs.c.user_key == user_key).order_by(glucose_logs.c.measured_at)
+                glucose_logs.c.meal_note,
+            )
+            .where(glucose_logs.c.user_key == user_key)
+            .order_by(glucose_logs.c.measured_at)
         ).fetchall()
     return [(r[0].isoformat(), r[1], float(r[2]), r[3] or "") for r in rows]
 
-def add_daily_checkin(user_key: str, checkin_date: date, followed_plan: bool, actual_meals: str = "") -> None:
+def add_daily_checkin(
+    user_key: str,
+    checkin_date: date,
+    followed_plan: bool,
+    actual_meals: str = "",
+) -> None:
     with get_engine().begin() as conn:
         conn.execute(insert(daily_checkins).values(
             user_key=user_key,
             checkin_date=checkin_date,
             followed_plan=1 if followed_plan else 0,
             actual_meals=actual_meals or None,
-            created_at=datetime.now()
+            created_at=datetime.now(),
         ))
 
 def fetch_checkins(user_key: str) -> List[Tuple[str, int, str]]:
@@ -162,7 +207,9 @@ def fetch_checkins(user_key: str) -> List[Tuple[str, int, str]]:
             select(
                 daily_checkins.c.checkin_date,
                 daily_checkins.c.followed_plan,
-                daily_checkins.c.actual_meals
-            ).where(daily_checkins.c.user_key == user_key).order_by(daily_checkins.c.checkin_date)
+                daily_checkins.c.actual_meals,
+            )
+            .where(daily_checkins.c.user_key == user_key)
+            .order_by(daily_checkins.c.checkin_date)
         ).fetchall()
     return [(r[0].isoformat(), int(r[1]), r[2] or "") for r in rows]
