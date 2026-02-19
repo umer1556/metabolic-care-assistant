@@ -91,7 +91,7 @@ def init_db() -> None:
     metadata.create_all(engine)
 
 def get_profile(user_key: str) -> Optional[Dict]:
-    with engine.begin() as conn:
+     with get_engine().begin() as conn:
         row = conn.execute(
             select(profiles).where(profiles.c.user_key == user_key)
         ).fetchone()
@@ -127,7 +127,7 @@ def upsert_profile(user_key: str, data: Dict) -> None:
         "updated_at": now,
     }
 
-    with engine.begin() as conn:
+     with get_engine().begin() as conn:
         exists = conn.execute(
             select(profiles.c.user_key).where(profiles.c.user_key == user_key)
         ).fetchone()
@@ -142,7 +142,7 @@ def upsert_profile(user_key: str, data: Dict) -> None:
             conn.execute(insert(profiles).values(**payload))
 
 def add_glucose_log(user_key: str, measured_at: datetime, reading_type: str, value: float, meal_note: str = "") -> None:
-    with engine.begin() as conn:
+     with get_engine().begin() as conn:
         conn.execute(insert(glucose_logs).values(
             user_key=user_key,
             measured_at=measured_at,
@@ -153,7 +153,7 @@ def add_glucose_log(user_key: str, measured_at: datetime, reading_type: str, val
         ))
 
 def fetch_glucose_logs(user_key: str) -> List[Tuple[str, str, float, str]]:
-    with engine.begin() as conn:
+     with get_engine().begin() as conn:
         rows = conn.execute(
             select(
                 glucose_logs.c.measured_at,
@@ -165,7 +165,7 @@ def fetch_glucose_logs(user_key: str) -> List[Tuple[str, str, float, str]]:
     return [(r[0].isoformat(), r[1], float(r[2]), r[3] or "") for r in rows]
 
 def add_daily_checkin(user_key: str, checkin_date: date, followed_plan: bool, actual_meals: str = "") -> None:
-    with engine.begin() as conn:
+     with get_engine().begin() as conn:
         conn.execute(insert(daily_checkins).values(
             user_key=user_key,
             checkin_date=checkin_date,
@@ -175,7 +175,7 @@ def add_daily_checkin(user_key: str, checkin_date: date, followed_plan: bool, ac
         ))
 
 def fetch_checkins(user_key: str) -> List[Tuple[str, int, str]]:
-    with engine.begin() as conn:
+    with get_engine().begin() as conn:
         rows = conn.execute(
             select(
                 daily_checkins.c.checkin_date,
