@@ -120,8 +120,8 @@ _render_sidebar()
 # -------------------------
 if "user_key" not in st.session_state:
     st.title("🩺 " + APP["title"])
-    st.markdown("#### Welcome! Please log in to continue.")
-    st.caption("Your data is saved privately using your phone number.")
+    st.markdown("#### Your personal metabolic health companion.")
+    st.caption("🔒 Private & secure — your phone number is never stored.")
 
     col1, col2 = st.columns([1, 1])
     with col1:
@@ -185,11 +185,11 @@ if "user_key" not in st.session_state:
 # Main app tabs
 # -------------------------
 tabs = st.tabs([
-    "1) 7-Day Plan",
-    "2) Profile & Eligibility",
-    "3) Daily Check-In",
-    "4) Log Glucose",
-    "5) Dashboard",
+    "🥗 Meal Plan",
+    "👤 My Profile",
+    "✅ Daily Check-In",
+    "📊 Log Glucose",
+    "📈 Dashboard",
 ])
 
 # -------------------------
@@ -396,11 +396,11 @@ with tabs[1]:
         emoji = TRIAGE_EMOJI.get(level, "")
 
         if level == "GREEN":
-            st.success(f"{emoji} **GREEN** — Stable. You can use all features of this tool.")
-        elif level == "AMBER":
-            st.warning(f"{emoji} **AMBER** — You can proceed, but clinician follow-up is strongly recommended.")
-        else:
-            st.error(f"{emoji} **RED** — This prototype is not suitable for your profile. Please seek clinician/hospital evaluation.")
+            st.success(f"{emoji} **All clear** — Your readings look stable. All features are unlocked.")
+       elif level == "AMBER":
+            st.warning(f"{emoji} **Proceed with care** — You can use the app, but we strongly recommend discussing your plan with a clinician.")
+       else:
+            st.error(f"{emoji} **Please see a clinician** — Your current readings suggest this app alone isn't enough. Please seek professional medical advice before making dietary changes.")
 
         if flags:
             for f in flags:
