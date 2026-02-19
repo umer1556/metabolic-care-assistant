@@ -1,4 +1,3 @@
-# app.py
 import os
 from datetime import datetime, date
 from typing import List, Optional
@@ -6,28 +5,41 @@ from typing import List, Optional
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
+import re, hashlib
 
 from config import APP, CARB, TRIAGE
 from triage import triage_profile
 from planner import generate_week_plan
+from llm import generate_swaps, coach_on_actual_meal
+
 from storage import (
     init_db,
+    get_profile,
+    upsert_profile,
     add_glucose_log,
     fetch_glucose_logs,
     add_daily_checkin,
     fetch_checkins,
 )
-from llm import generate_swaps, coach_on_actual_meal
 
 st.set_page_config(page_title=APP["title"], layout="wide")
 
 # Load Streamlit Secrets → environment variables (for Groq)
 os.environ["GROQ_API_KEY"] = st.secrets.get("GROQ_API_KEY", os.getenv("GROQ_API_KEY", ""))
-os.environ["GROQ_BASE_URL"] = st.secrets.get("GROQ_BASE_URL", os.getenv("GROQ_BASE_URL", "https://api.groq.com/openai/v1"))
-os.environ["GROQ_MODEL"] = st.secrets.get("GROQ_MODEL", os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"))
+os.environ["GROQ_BASE_URL"] = st.secrets.get(
+    "GROQ_BASE_URL",
+    os.getenv("GROQ_BASE_URL", "https://api.groq.com/openai/v1")
+)
+os.environ["GROQ_MODEL"] = st.secrets.get(
+    "GROQ_MODEL",
+    os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+)
 
 init_db()
 
+# -------------------------
+# Header + Disclaimer
+# -------------------------
 st.title(APP["title"])
 
 st.info(
@@ -47,15 +59,88 @@ with st.expander("Medical Disclaimer", expanded=False):
         """
     )
 
+# -------------------------
+# Quick Access Login (Name + Phone)
+# -------------------------
+def normalize_phone(phone: str) -> str:
+    phone = phone.strip()
+    phone = re.sub(r"[^\d+]", "", phone)
+    return phone
 
+def user_key_from_phone(phone: str) -> str:
+    salt = st.secrets.get("PHONE_SALT", "dev-salt-change-me")
+    return hashlib.sha256((salt + phone).encode("utf-8")).hexdigest()
 
+def last4(phone: str) -> str:
+    digits = re.sub(r"\D", "", phone)
+    return digits[-4:] if len(digits) >= 4 else digits
+
+# ---------- QUICK ACCESS LOGIN ----------
+if "user_key" not in st.session_state:
+    st.subheader("Quick Access Login")
+    st.caption("Enter phone with country code, e.g., +92..., +44...")
+
+    full_name = st.text_input("Full Name")
+    phone = st.text_input("Phone Number")
+
+    if st.button("Continue"):
+        phone_n = normalize_phone(phone)
+
+        if not full_name.strip():
+            st.error("Enter your full name.")
+            st.stop()
+        if not phone_n.startswith("+") or len(phone_n) < 8:
+            st.error("Enter a valid phone number with +country code.")
+            st.stop()
+
+        user_key = user_key_from_phone(phone_n)
+
+        st.session_state["user_key"] = user_key
+        st.session_state["display_name"] = full_name.strip()
+        st.session_state["phone_last4"] = last4(phone_n)
+
+        # Load profile if exists
+        prof = get_profile(user_key)
+        if prof:
+            # prefill app session
+            st.session_state["name"] = prof.get("full_name") or full_name.strip()
+            st.session_state["age"] = prof.get("age") or 25
+            st.session_state["gender"] = prof.get("gender") or "Prefer not to say"
+            st.session_state["height_cm"] = prof.get("height_cm") or 0
+            st.session_state["weight_kg"] = prof.get("weight_kg") or 0.0
+            st.session_state["family_history"] = prof.get("family_history") or []
+            st.session_state["diabetes_type"] = prof.get("diabetes_type") or "Type 2"
+            st.session_state["has_hypertension"] = bool(prof.get("has_hypertension") or 0)
+            st.session_state["has_high_cholesterol"] = bool(prof.get("has_high_cholesterol") or 0)
+            st.session_state["phone_last4"] = prof.get("phone_last4") or st.session_state.get("phone_last4")
+        else:
+            # create minimal profile row
+            upsert_profile(user_key, {
+                "full_name": full_name.strip(),
+                "phone_last4": st.session_state.get("phone_last4"),
+                "family_history": [],
+            })
+
+        st.rerun()
+
+    st.stop()
+
+st.sidebar.success(f"Logged in: {st.session_state.get('display_name','User')}")
+if st.sidebar.button("Logout"):
+    for k in ["user_key", "display_name", "phone_last4", "triage_level", "triage_flags", "week_plan"]:
+        st.session_state.pop(k, None)
+    st.rerun()
+
+# -------------------------
+# Tabs
+# -------------------------
 tabs = st.tabs(["1) Profile", "2) 7-Day Plan", "3) Daily Check-In", "4) Log Glucose", "5) Dashboard"])
 
 # -------------------------
 # Helpers
 # -------------------------
 def _get_user() -> str:
-    return st.session_state.get("name", "").strip()
+    return st.session_state.get("user_key", "").strip()
 
 def _triage_level() -> Optional[str]:
     return st.session_state.get("triage_level")
@@ -67,33 +152,52 @@ def _parse_recent_fastings(vals: List[float]) -> List[float]:
     return [v for v in vals if v is not None and v > 0]
 
 # -------------------------
-# 1) Profile
+# 1) Profile (TAB 0)
 # -------------------------
 with tabs[0]:
     st.subheader("Create profile + eligibility (Green / Amber / Red)")
 
     name = st.text_input("Name", value=st.session_state.get("name", ""))
-    age = st.number_input("Age", min_value=1, max_value=120, value=int(st.session_state.get("age", 25)))
-
-    gender = st.selectbox(
-        "Gender (optional)",
-        ["Prefer not to say", "Male", "Female", "Other"],
-        index=0
+    age = st.number_input(
+        "Age",
+        min_value=1,
+        max_value=120,
+        value=int(st.session_state.get("age", 25))
     )
+
+    gender_options = ["Prefer not to say", "Male", "Female", "Other"]
+    saved_gender = st.session_state.get("gender", "Prefer not to say")
+    gender_index = gender_options.index(saved_gender) if saved_gender in gender_options else 0
+    gender = st.selectbox("Gender (optional)", gender_options, index=gender_index)
 
     col_hw1, col_hw2 = st.columns(2)
     with col_hw1:
-        height_cm = st.number_input("Height (cm) (optional)", min_value=0, max_value=250, value=0)
+        height_cm = st.number_input(
+            "Height (cm) (optional)",
+            min_value=0,
+            max_value=250,
+            value=int(st.session_state.get("height_cm", 0) or 0)
+        )
     with col_hw2:
-        weight_kg = st.number_input("Weight (kg) (optional)", min_value=0.0, max_value=400.0, value=0.0, step=0.5)
+        weight_kg = st.number_input(
+            "Weight (kg) (optional)",
+            min_value=0.0,
+            max_value=400.0,
+            value=float(st.session_state.get("weight_kg", 0.0) or 0.0),
+            step=0.5
+        )
 
     family_history = st.multiselect(
         "Family history (optional)",
         ["Diabetes", "Hypertension", "High cholesterol", "Heart disease"],
-        default=[]
+        default=st.session_state.get("family_history", [])
     )
 
-    diabetes_type = st.selectbox("Diabetes type", ["Type 1", "Type 2", "Not sure"], index=1)
+    diabetes_type = st.selectbox(
+        "Diabetes type",
+        ["Type 1", "Type 2", "Not sure"],
+        index=1
+    )
 
     bmi = None
     if height_cm > 0 and weight_kg > 0:
@@ -101,13 +205,18 @@ with tabs[0]:
         bmi = weight_kg / (h_m * h_m)
         st.caption(f"Estimated BMI (informational only): {bmi:.1f}")
 
-
     st.markdown("### Optional conditions")
     c1, c2, c3 = st.columns(3)
     with c1:
-        has_hypertension = st.checkbox("I have hypertension / high blood pressure", value=st.session_state.get("has_hypertension", False))
+        has_hypertension = st.checkbox(
+            "I have hypertension / high blood pressure",
+            value=st.session_state.get("has_hypertension", False)
+        )
     with c2:
-        has_high_cholesterol = st.checkbox("I have high cholesterol", value=st.session_state.get("has_high_cholesterol", False))
+        has_high_cholesterol = st.checkbox(
+            "I have high cholesterol",
+            value=st.session_state.get("has_high_cholesterol", False)
+        )
     with c3:
         other_major = st.checkbox("Other major conditions (kidney disease, pregnancy, etc.)", value=False)
 
@@ -115,15 +224,37 @@ with tabs[0]:
     colA, colB, colC = st.columns(3)
 
     with colA:
-        bp_sys = st.number_input("Systolic BP (optional)", min_value=0, max_value=300, value=130 if has_hypertension else 0)
-        bp_dia = st.number_input("Diastolic BP (optional)", min_value=0, max_value=200, value=80 if has_hypertension else 0)
+        bp_sys = st.number_input(
+            "Systolic BP (optional)",
+            min_value=0,
+            max_value=300,
+            value=130 if has_hypertension else 0
+        )
+        bp_dia = st.number_input(
+            "Diastolic BP (optional)",
+            min_value=0,
+            max_value=200,
+            value=80 if has_hypertension else 0
+        )
 
     with colB:
-        a1c = st.number_input("HbA1c (%) — 3-month average (optional)", min_value=0.0, max_value=20.0, value=0.0, step=0.1)
+        a1c = st.number_input(
+            "HbA1c (%) — 3-month average (optional)",
+            min_value=0.0,
+            max_value=20.0,
+            value=0.0,
+            step=0.1
+        )
         st.caption("If you don’t know A1c, enter 2–3 recent fasting readings below.")
 
     with colC:
-        total_chol = st.number_input("Total cholesterol mg/dL (optional)", min_value=0.0, max_value=600.0, value=0.0, step=1.0)
+        total_chol = st.number_input(
+            "Total cholesterol mg/dL (optional)",
+            min_value=0.0,
+            max_value=600.0,
+            value=0.0,
+            step=1.0
+        )
 
     st.markdown("### Recent fasting readings (optional)")
     f1, f2, f3 = st.columns(3)
@@ -135,24 +266,26 @@ with tabs[0]:
         fasting3 = st.number_input("Fasting (Day -1) mg/dL", min_value=0.0, max_value=600.0, value=0.0, step=1.0)
 
     if st.button("Save profile & run eligibility"):
-        st.session_state["name"] = name
-        st.session_state["age"] = age
+        # Save in session
+        st.session_state["name"] = name.strip()
+        st.session_state["age"] = int(age)
         st.session_state["diabetes_type"] = diabetes_type
         st.session_state["has_hypertension"] = has_hypertension
         st.session_state["has_high_cholesterol"] = has_high_cholesterol
         st.session_state["gender"] = gender
-        st.session_state["height_cm"] = height_cm
-        st.session_state["weight_kg"] = weight_kg
+        st.session_state["height_cm"] = int(height_cm)
+        st.session_state["weight_kg"] = float(weight_kg)
         st.session_state["family_history"] = family_history
         st.session_state["bmi"] = bmi
 
+        # Normalize optional values
         bp_sys_val = float(bp_sys) if bp_sys and bp_sys > 0 else None
         bp_dia_val = float(bp_dia) if bp_dia and bp_dia > 0 else None
         a1c_val = float(a1c) if a1c and a1c > 0 else None
         tc_val = float(total_chol) if total_chol and total_chol > 0 else None
-
         fasting_vals = _parse_recent_fastings([fasting1, fasting2, fasting3])
 
+        # Run triage
         level, flags = triage_profile(
             diabetes_type=diabetes_type,
             has_hypertension=has_hypertension,
@@ -167,6 +300,22 @@ with tabs[0]:
 
         st.session_state["triage_level"] = level
         st.session_state["triage_flags"] = flags
+
+        # ---- STEP 5: SAVE PROFILE TO DATABASE ----
+        upsert_profile(st.session_state["user_key"], {
+            "full_name": st.session_state.get("name", "").strip(),
+            "phone_last4": st.session_state.get("phone_last4"),
+
+            "age": int(st.session_state.get("age")) if st.session_state.get("age") else None,
+            "gender": st.session_state.get("gender"),
+            "height_cm": int(st.session_state.get("height_cm")) if st.session_state.get("height_cm") else None,
+            "weight_kg": float(st.session_state.get("weight_kg")) if st.session_state.get("weight_kg") else None,
+            "family_history": st.session_state.get("family_history", []),
+
+            "diabetes_type": st.session_state.get("diabetes_type"),
+            "has_hypertension": 1 if st.session_state.get("has_hypertension") else 0,
+            "has_high_cholesterol": 1 if st.session_state.get("has_high_cholesterol") else 0,
+        })
 
     if "triage_level" in st.session_state:
         level = st.session_state["triage_level"]
@@ -183,7 +332,7 @@ with tabs[0]:
             st.write("Notes:")
             for f in flags:
                 st.write("•", f)
-        # --- ADD THIS BELOW THE FLAGS ---
+
         if st.session_state.get("family_history"):
             st.info(
                 f"Family history noted: {', '.join(st.session_state['family_history'])}. "
