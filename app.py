@@ -122,6 +122,11 @@ if height_cm > 0 and weight_kg > 0:
         st.session_state["diabetes_type"] = diabetes_type
         st.session_state["has_hypertension"] = has_hypertension
         st.session_state["has_high_cholesterol"] = has_high_cholesterol
+        st.session_state["gender"] = gender
+        st.session_state["height_cm"] = height_cm
+        st.session_state["weight_kg"] = weight_kg
+        st.session_state["family_history"] = family_history
+        st.session_state["bmi"] = bmi
 
         bp_sys_val = float(bp_sys) if bp_sys and bp_sys > 0 else None
         bp_dia_val = float(bp_dia) if bp_dia and bp_dia > 0 else None
