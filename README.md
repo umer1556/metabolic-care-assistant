@@ -147,26 +147,71 @@ pip install -r requirements.txt
 Create `.streamlit/secrets.toml`:
 
 ```toml
-GROQ_API_KEY    = "your-groq-api-key"
-DATABASE_URL    = "postgresql://..."   # from Supabase → Settings → Database → Connection string (Transaction pooler)
-PHONE_SALT      = "any-random-secret-string"
+GROQ_API_KEY   = "your-groq-api-key"
+DATABASE_URL   = "postgresql+psycopg://USER:PASSWORD@HOST:PORT/DBNAME"
+PHONE_SALT     = "any-random-secret-string"
 
 # Optional — defaults shown
-GROQ_BASE_URL   = "https://api.groq.com/openai/v1"
-GROQ_MODEL      = "llama-3.3-70b-versatile"
+GROQ_BASE_URL  = "https://api.groq.com/openai/v1"
+GROQ_MODEL     = "llama-3.3-70b-versatile"
 ```
 
-> **No Supabase?** Leave `DATABASE_URL` empty — the app automatically falls back to a local `data.db` SQLite file.
+> **Where to find `DATABASE_URL`:** Supabase dashboard → Project Settings → Database → Connection string → **Transaction pooler** tab. Copy that string exactly.
+
+> **No Supabase?** Leave `DATABASE_URL` empty — the app automatically falls back to a local `data.db` SQLite file with no setup required.
+
+---
 
 ### 4. Set up the database (Supabase only)
 
-If using Supabase, run this in the SQL Editor to clear any old tables before first run:
+If using Supabase, run the following in the **SQL Editor** (Supabase dashboard → SQL Editor → New query):
+
 ```sql
-DROP TABLE IF EXISTS daily_checkins;
-DROP TABLE IF EXISTS glucose_logs;
-DROP TABLE IF EXISTS profiles;
+-- Drop old tables if they exist (clean slate)
+DROP TABLE IF EXISTS public.daily_checkins;
+DROP TABLE IF EXISTS public.glucose_logs;
+DROP TABLE IF EXISTS public.profiles;
+
+-- Profiles table
+CREATE TABLE IF NOT EXISTS public.profiles (
+    user_key        VARCHAR(80) PRIMARY KEY,
+    full_name       TEXT,
+    phone_last4     VARCHAR(8),
+    age             INTEGER,
+    gender          TEXT,
+    height_cm       INTEGER,
+    weight_kg       NUMERIC,
+    family_history_json TEXT,
+    diabetes_type   TEXT,
+    has_hypertension    INTEGER,
+    has_high_cholesterol INTEGER,
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Glucose logs table
+CREATE TABLE IF NOT EXISTS public.glucose_logs (
+    id              BIGSERIAL PRIMARY KEY,
+    user_key        VARCHAR(80) NOT NULL,
+    measured_at     TIMESTAMPTZ NOT NULL,
+    logged_at       TIMESTAMPTZ DEFAULT NOW(),
+    reading_type    TEXT NOT NULL,
+    value           NUMERIC NOT NULL,
+    meal_note       TEXT
+);
+
+-- Daily check-ins table
+CREATE TABLE IF NOT EXISTS public.daily_checkins (
+    id              BIGSERIAL PRIMARY KEY,
+    user_key        VARCHAR(80) NOT NULL,
+    checkin_date    DATE NOT NULL,
+    followed_plan   INTEGER NOT NULL,
+    actual_meals    TEXT,
+    created_at      TIMESTAMPTZ DEFAULT NOW()
+);
 ```
-The app will recreate them correctly on startup.
+
+> **Note:** The app will also auto-create these tables on first run via `init_db()` — the SQL above is provided for transparency and manual setup.
 
 ### 5. Run the app
 ```bash
@@ -220,7 +265,7 @@ The planner filters meals by these tags based on the user's conditions — e.g. 
 - **Not a medical device.** This is an educational prototype built for a hackathon.
 - **Not medication advice.** The app never suggests insulin doses, medication changes, or diagnostic conclusions.
 - **Not a replacement for clinical care.** Users with RED triage results are explicitly blocked and directed to a clinician.
-- The meal bank is small (14 meals) and should be reviewed and expanded by a registered dietitian before any real-world deployment.
+- The meal bank is small (14 meals) and should be reviewed by a registered dietitian before any real-world deployment.
 - AI-generated suggestions are validated against a strict prompt but are not reviewed by a clinician in real time.
 
 ---
@@ -242,7 +287,7 @@ Built at the **HEC Generative AI Hackathon** by:
 
 | Name | GitHub |
 |---|---|
-| Muhammed Umer | [umer1556](https://github.com/umer1556) |
+| Muhammed Umer | [@umer1556](https://github.com/umer1556) |
 | [Name 2] | [@username](https://github.com/username) |
 | [Name 3] | [@username](https://github.com/username) |
 | [Name 4] | [@username](https://github.com/username) |
