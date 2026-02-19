@@ -165,6 +165,12 @@ if height_cm > 0 and weight_kg > 0:
             st.write("Notes:")
             for f in flags:
                 st.write("•", f)
+        # --- ADD THIS BELOW THE FLAGS ---
+        if st.session_state.get("family_history"):
+            st.info(
+                f"Family history noted: {', '.join(st.session_state['family_history'])}. "
+                "This tool supports habit-building; follow clinician guidance for targets."
+            )
 
 # -------------------------
 # 2) 7-Day Plan
@@ -233,7 +239,17 @@ with tabs[2]:
             if st.button("Save check-in + get suggestions"):
                 add_daily_checkin(user, checkin_date, followed_plan=False, actual_meals=actual.strip())
                 st.success("Saved ✅ Here are safer ways to handle that choice next time:")
-                tips = coach_on_actual_meal(actual.strip())
+                profile_ctx = (
+                f"Age: {st.session_state.get('age')}, "
+                f"Gender: {st.session_state.get('gender')}, "
+                f"Height_cm: {st.session_state.get('height_cm')}, "
+                f"Weight_kg: {st.session_state.get('weight_kg')}, "
+                f"BMI: {st.session_state.get('bmi')}, "
+                f"FamilyHistory: {st.session_state.get('family_history')}"
+                )
+
+                tips = coach_on_actual_meal(f"{actual.strip()} | Profile: {profile_ctx}")
+
                 for t in tips:
                     st.write("•", t)
 
