@@ -398,7 +398,7 @@ with tabs[1]:
         if level == "GREEN":
             st.success(f"{emoji} **All clear** — Your readings look stable. All features are unlocked.")
        elif level == "AMBER":
-            st.warning(f"{emoji} **Proceed with care** — You can use the app, but we strongly recommend discussing your plan with a clinician.")
+           st.warning(f"{emoji} **Proceed with care** — You can use the app, but we strongly recommend discussing your plan with a clinician.")
        else:
             st.error(f"{emoji} **Please see a clinician** — Your current readings suggest this app alone isn't enough. Please seek professional medical advice before making dietary changes.")
 
