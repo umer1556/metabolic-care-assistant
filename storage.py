@@ -58,49 +58,42 @@ def get_engine():
 
 metadata = MetaData()
 
-# All three tables use "user_key" consistently.
-# If your Supabase tables were created with a different name, DROP them and
-# let init_db() recreate them via the SQL Editor:
-#   DROP TABLE IF EXISTS daily_checkins;
-#   DROP TABLE IF EXISTS glucose_logs;
-#   DROP TABLE IF EXISTS profiles;
-
 profiles = Table(
     "profiles", metadata,
-    Column("user_key", String(80), primary_key=True),
-    Column("full_name", String(200), nullable=True),
-    Column("phone_last4", String(8), nullable=True),
-    Column("age", Integer, nullable=True),
-    Column("gender", String(30), nullable=True),
-    Column("height_cm", Integer, nullable=True),
-    Column("weight_kg", Float, nullable=True),
-    Column("family_history_json", Text, nullable=True),
-    Column("diabetes_type", String(30), nullable=True),
-    Column("has_hypertension", Integer, nullable=True),
-    Column("has_high_cholesterol", Integer, nullable=True),
-    Column("created_at", DateTime, nullable=False),
-    Column("updated_at", DateTime, nullable=False),
+    Column("user_key",            String(80),  primary_key=True),
+    Column("full_name",           String(200), nullable=True),
+    Column("phone_last4",         String(8),   nullable=True),
+    Column("age",                 Integer,     nullable=True),
+    Column("gender",              String(30),  nullable=True),
+    Column("height_cm",           Integer,     nullable=True),
+    Column("weight_kg",           Float,       nullable=True),
+    Column("family_history_json", Text,        nullable=True),
+    Column("diabetes_type",       String(30),  nullable=True),
+    Column("has_hypertension",    Integer,     nullable=True),
+    Column("has_high_cholesterol",Integer,     nullable=True),
+    Column("created_at",          DateTime,    nullable=False),
+    Column("updated_at",          DateTime,    nullable=False),
 )
 
 glucose_logs = Table(
     "glucose_logs", metadata,
-    Column("id", Integer, primary_key=True, autoincrement=True),
-    Column("user_key", String(80), nullable=False),
-    Column("measured_at", DateTime, nullable=False),
-    Column("logged_at", DateTime, nullable=False),
+    Column("id",           Integer,    primary_key=True, autoincrement=True),
+    Column("user_key",     String(80), nullable=False),
+    Column("measured_at",  DateTime,   nullable=False),
+    Column("logged_at",    DateTime,   nullable=False),
     Column("reading_type", String(40), nullable=False),
-    Column("value", Float, nullable=False),
-    Column("meal_note", Text, nullable=True),
+    Column("value",        Float,      nullable=False),
+    Column("meal_note",    Text,       nullable=True),
 )
 
 daily_checkins = Table(
     "daily_checkins", metadata,
-    Column("id", Integer, primary_key=True, autoincrement=True),
-    Column("user_key", String(80), nullable=False),
-    Column("checkin_date", Date, nullable=False),
-    Column("followed_plan", Integer, nullable=False),
-    Column("actual_meals", Text, nullable=True),
-    Column("created_at", DateTime, nullable=False),
+    Column("id",           Integer,    primary_key=True, autoincrement=True),
+    Column("user_key",     String(80), nullable=False),
+    Column("checkin_date", Date,       nullable=False),
+    Column("followed_plan",Integer,    nullable=False),
+    Column("actual_meals", Text,       nullable=True),
+    Column("created_at",   DateTime,   nullable=False),
 )
 
 
@@ -125,21 +118,21 @@ def get_profile(user_key: str) -> Optional[Dict]:
 
 def upsert_profile(user_key: str, data: Dict) -> None:
     now = datetime.now()
-    family_history = data.get("family_history", [])
+    family_history      = data.get("family_history", [])
     family_history_json = json.dumps(family_history if isinstance(family_history, list) else [])
 
     payload = {
-        "full_name": data.get("full_name"),
-        "phone_last4": data.get("phone_last4"),
-        "age": data.get("age"),
-        "gender": data.get("gender"),
-        "height_cm": data.get("height_cm"),
-        "weight_kg": data.get("weight_kg"),
-        "family_history_json": family_history_json,
-        "diabetes_type": data.get("diabetes_type"),
-        "has_hypertension": data.get("has_hypertension"),
+        "full_name":            data.get("full_name"),
+        "phone_last4":          data.get("phone_last4"),
+        "age":                  data.get("age"),
+        "gender":               data.get("gender"),
+        "height_cm":            data.get("height_cm"),
+        "weight_kg":            data.get("weight_kg"),
+        "family_history_json":  family_history_json,
+        "diabetes_type":        data.get("diabetes_type"),
+        "has_hypertension":     data.get("has_hypertension"),
         "has_high_cholesterol": data.get("has_high_cholesterol"),
-        "updated_at": now,
+        "updated_at":           now,
     }
 
     with get_engine().begin() as conn:
@@ -152,17 +145,14 @@ def upsert_profile(user_key: str, data: Dict) -> None:
                 update(profiles).where(profiles.c.user_key == user_key).values(**payload)
             )
         else:
-            payload["user_key"] = user_key
-            payload["created_at"] = now
+            payload["user_key"]    = user_key
+            payload["created_at"]  = now
             conn.execute(insert(profiles).values(**payload))
 
 
 def add_glucose_log(
-    user_key: str,
-    measured_at: datetime,
-    reading_type: str,
-    value: float,
-    meal_note: str = "",
+    user_key: str, measured_at: datetime,
+    reading_type: str, value: float, meal_note: str = ""
 ) -> None:
     with get_engine().begin() as conn:
         conn.execute(insert(glucose_logs).values(
@@ -191,10 +181,8 @@ def fetch_glucose_logs(user_key: str) -> List[Tuple[str, str, float, str]]:
 
 
 def add_daily_checkin(
-    user_key: str,
-    checkin_date: date,
-    followed_plan: bool,
-    actual_meals: str = "",
+    user_key: str, checkin_date: date,
+    followed_plan: bool, actual_meals: str = ""
 ) -> None:
     with get_engine().begin() as conn:
         conn.execute(insert(daily_checkins).values(
