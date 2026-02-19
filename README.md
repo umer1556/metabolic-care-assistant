@@ -239,7 +239,17 @@ The planner filters meals by these tags based on the user's conditions — e.g. 
 ## 👥 Team
 
 Built at the **HEC Generative AI Hackathon** by [umer1556](https://github.com/umer1556).
+## 👥 Team
 
+Built at the **HEC Generative AI Hackathon** by:
+
+| Name | GitHub |
+|---|---|
+| [M.Umer] | [umer1556](https://github.com/umer1556) |
+| [Name 2] | [@username](https://github.com/username) |
+| [Name 3] | [@username](https://github.com/username) |
+| [Name 4] | [@username](https://github.com/username) |
+| [Name 5] | [@username](https://github.com/username) |
 ---
 
 ## 📄 License
