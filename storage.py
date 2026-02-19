@@ -12,17 +12,13 @@ from sqlalchemy.sql import select, insert, update
 from sqlalchemy.pool import NullPool
 
 def _get_db_url() -> str:
-    # 1) env var (local / cloud)
     url = os.getenv("DATABASE_URL", "").strip()
-
-    # 2) Streamlit secrets (Streamlit Cloud)
     if not url:
         try:
             import streamlit as st
             url = str(st.secrets.get("DATABASE_URL", "")).strip()
         except Exception:
             pass
-
     return url
 
 _engine = None
@@ -31,37 +27,27 @@ def get_engine():
     global _engine
     if _engine is None:
         db_url = _get_db_url()
-
         if db_url:
             _engine = create_engine(db_url, pool_pre_ping=True, poolclass=NullPool)
         else:
             _engine = create_engine("sqlite:///data.db", connect_args={"check_same_thread": False})
-
     return _engine
 
 metadata = MetaData()
 
-def init_db() -> None:
-    metadata.create_all(get_engine())
-
-
-# Stores user profile data (keyed by a hashed phone “user_key”)
 profiles = Table(
     "profiles", metadata,
     Column("user_key", String(80), primary_key=True),
     Column("full_name", String(200), nullable=True),
     Column("phone_last4", String(8), nullable=True),
-
     Column("age", Integer, nullable=True),
     Column("gender", String(30), nullable=True),
     Column("height_cm", Integer, nullable=True),
     Column("weight_kg", Float, nullable=True),
     Column("family_history_json", Text, nullable=True),
-
     Column("diabetes_type", String(30), nullable=True),
     Column("has_hypertension", Integer, nullable=True),
     Column("has_high_cholesterol", Integer, nullable=True),
-
     Column("created_at", DateTime, nullable=False),
     Column("updated_at", DateTime, nullable=False),
 )
@@ -82,23 +68,22 @@ daily_checkins = Table(
     Column("id", Integer, primary_key=True, autoincrement=True),
     Column("user_key", String(80), nullable=False),
     Column("checkin_date", Date, nullable=False),
-    Column("followed_plan", Integer, nullable=False),  # 1 or 0
+    Column("followed_plan", Integer, nullable=False),
     Column("actual_meals", Text, nullable=True),
     Column("created_at", DateTime, nullable=False),
 )
 
 def init_db() -> None:
-    metadata.create_all(engine)
+    metadata.create_all(get_engine())
 
 def get_profile(user_key: str) -> Optional[Dict]:
-     with get_engine().begin() as conn:
+    with get_engine().begin() as conn:
         row = conn.execute(
             select(profiles).where(profiles.c.user_key == user_key)
         ).fetchone()
     if not row:
         return None
     d = dict(row._mapping)
-    # decode family_history
     try:
         d["family_history"] = json.loads(d.get("family_history_json") or "[]")
     except Exception:
@@ -113,21 +98,18 @@ def upsert_profile(user_key: str, data: Dict) -> None:
     payload = {
         "full_name": data.get("full_name"),
         "phone_last4": data.get("phone_last4"),
-
         "age": data.get("age"),
         "gender": data.get("gender"),
         "height_cm": data.get("height_cm"),
         "weight_kg": data.get("weight_kg"),
         "family_history_json": family_history_json,
-
         "diabetes_type": data.get("diabetes_type"),
         "has_hypertension": data.get("has_hypertension"),
         "has_high_cholesterol": data.get("has_high_cholesterol"),
-
         "updated_at": now,
     }
 
-     with get_engine().begin() as conn:
+    with get_engine().begin() as conn:
         exists = conn.execute(
             select(profiles.c.user_key).where(profiles.c.user_key == user_key)
         ).fetchone()
@@ -142,7 +124,7 @@ def upsert_profile(user_key: str, data: Dict) -> None:
             conn.execute(insert(profiles).values(**payload))
 
 def add_glucose_log(user_key: str, measured_at: datetime, reading_type: str, value: float, meal_note: str = "") -> None:
-     with get_engine().begin() as conn:
+    with get_engine().begin() as conn:
         conn.execute(insert(glucose_logs).values(
             user_key=user_key,
             measured_at=measured_at,
@@ -153,7 +135,7 @@ def add_glucose_log(user_key: str, measured_at: datetime, reading_type: str, val
         ))
 
 def fetch_glucose_logs(user_key: str) -> List[Tuple[str, str, float, str]]:
-     with get_engine().begin() as conn:
+    with get_engine().begin() as conn:
         rows = conn.execute(
             select(
                 glucose_logs.c.measured_at,
@@ -165,7 +147,7 @@ def fetch_glucose_logs(user_key: str) -> List[Tuple[str, str, float, str]]:
     return [(r[0].isoformat(), r[1], float(r[2]), r[3] or "") for r in rows]
 
 def add_daily_checkin(user_key: str, checkin_date: date, followed_plan: bool, actual_meals: str = "") -> None:
-     with get_engine().begin() as conn:
+    with get_engine().begin() as conn:
         conn.execute(insert(daily_checkins).values(
             user_key=user_key,
             checkin_date=checkin_date,
