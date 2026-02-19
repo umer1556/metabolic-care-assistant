@@ -1,79 +1,91 @@
 # storage.py
-import sqlite3
+import os
 from datetime import datetime, date
-from pathlib import Path
-from typing import List, Tuple, Optional
+from typing import List, Tuple
 
-DB_PATH = Path("data.db")
+from sqlalchemy import (
+    create_engine, MetaData, Table, Column,
+    Integer, Float, String, Date, DateTime, Text
+)
+from sqlalchemy.sql import select, insert
+
+DB_URL = os.getenv("DATABASE_URL", "").strip()
+
+# If DATABASE_URL exists -> persistent Postgres. Otherwise -> local SQLite (for local dev).
+if DB_URL:
+    engine = create_engine(DB_URL, pool_pre_ping=True)
+else:
+    engine = create_engine("sqlite:///data.db", connect_args={"check_same_thread": False})
+
+metadata = MetaData()
+
+glucose_logs = Table(
+    "glucose_logs", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("user", String(120), nullable=False),
+    Column("measured_at", DateTime, nullable=False),
+    Column("logged_at", DateTime, nullable=False),
+    Column("reading_type", String(40), nullable=False),
+    Column("value", Float, nullable=False),
+    Column("meal_note", Text, nullable=True),
+)
+
+daily_checkins = Table(
+    "daily_checkins", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("user", String(120), nullable=False),
+    Column("checkin_date", Date, nullable=False),
+    Column("followed_plan", Integer, nullable=False),  # 1 or 0
+    Column("actual_meals", Text, nullable=True),
+    Column("created_at", DateTime, nullable=False),
+)
 
 def init_db() -> None:
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
-
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS glucose_logs (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user TEXT NOT NULL,
-        measured_at TEXT NOT NULL,
-        logged_at TEXT NOT NULL,
-        reading_type TEXT NOT NULL,
-        value REAL NOT NULL,
-        meal_note TEXT
-    )
-    """)
-
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS daily_checkins (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user TEXT NOT NULL,
-        checkin_date TEXT NOT NULL,
-        followed_plan INTEGER NOT NULL,
-        actual_meals TEXT,
-        created_at TEXT NOT NULL
-    )
-    """)
-
-    conn.commit()
-    conn.close()
+    metadata.create_all(engine)
 
 def add_glucose_log(user: str, measured_at: datetime, reading_type: str, value: float, meal_note: str = "") -> None:
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
-    cur.execute(
-        "INSERT INTO glucose_logs(user, measured_at, logged_at, reading_type, value, meal_note) VALUES(?,?,?,?,?,?)",
-        (user, measured_at.isoformat(), datetime.now().isoformat(), reading_type, float(value), meal_note)
-    )
-    conn.commit()
-    conn.close()
+    with engine.begin() as conn:
+        conn.execute(insert(glucose_logs).values(
+            user=user,
+            measured_at=measured_at,
+            logged_at=datetime.now(),
+            reading_type=reading_type,
+            value=float(value),
+            meal_note=meal_note or None
+        ))
 
 def fetch_glucose_logs(user: str) -> List[Tuple[str, str, float, str]]:
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
-    cur.execute(
-        "SELECT measured_at, reading_type, value, COALESCE(meal_note,'') FROM glucose_logs WHERE user=? ORDER BY measured_at",
-        (user,)
-    )
-    rows = cur.fetchall()
-    conn.close()
-    return rows
+    with engine.begin() as conn:
+        rows = conn.execute(
+            select(
+                glucose_logs.c.measured_at,
+                glucose_logs.c.reading_type,
+                glucose_logs.c.value,
+                glucose_logs.c.meal_note
+            ).where(glucose_logs.c.user == user).order_by(glucose_logs.c.measured_at)
+        ).fetchall()
+
+    # Normalize output to match your app expectations
+    return [(r[0].isoformat(), r[1], float(r[2]), r[3] or "") for r in rows]
 
 def add_daily_checkin(user: str, checkin_date: date, followed_plan: bool, actual_meals: str = "") -> None:
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
-    cur.execute(
-        "INSERT INTO daily_checkins(user, checkin_date, followed_plan, actual_meals, created_at) VALUES(?,?,?,?,?)",
-        (user, checkin_date.isoformat(), 1 if followed_plan else 0, actual_meals, datetime.now().isoformat())
-    )
-    conn.commit()
-    conn.close()
+    with engine.begin() as conn:
+        conn.execute(insert(daily_checkins).values(
+            user=user,
+            checkin_date=checkin_date,
+            followed_plan=1 if followed_plan else 0,
+            actual_meals=actual_meals or None,
+            created_at=datetime.now()
+        ))
 
 def fetch_checkins(user: str) -> List[Tuple[str, int, str]]:
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
-    cur.execute(
-        "SELECT checkin_date, followed_plan, COALESCE(actual_meals,'') FROM daily_checkins WHERE user=? ORDER BY checkin_date",
-        (user,)
-    )
-    rows = cur.fetchall()
-    conn.close()
-    return rows
+    with engine.begin() as conn:
+        rows = conn.execute(
+            select(
+                daily_checkins.c.checkin_date,
+                daily_checkins.c.followed_plan,
+                daily_checkins.c.actual_meals
+            ).where(daily_checkins.c.user == user).order_by(daily_checkins.c.checkin_date)
+        ).fetchall()
+
+    return [(r[0].isoformat(), int(r[1]), r[2] or "") for r in rows]
