@@ -29,7 +29,18 @@ os.environ["GROQ_MODEL"] = st.secrets.get("GROQ_MODEL", os.getenv("GROQ_MODEL", 
 init_db()
 
 st.title(APP["title"])
-st.caption(APP["disclaimer"])
+
+st.warning(
+    "Medical Disclaimer: This tool is for general informational purposes only and does not replace professional medical advice. "
+    "This is not medication dosing advice. Always follow your healthcare provider’s instructions."
+)
+with st.expander("Medical Disclaimer (Read)", expanded=False):
+    st.write("• This content is for general informational purposes only and does not replace professional medical advice.")
+    st.write("• Consult your doctor if your blood sugar is repeatedly above 180 mg/dL (or your doctor’s recommended target).")
+    st.write("• Hypoglycemia warning signs may include: shakiness, sweating, dizziness, hunger, irritability, confusion, rapid heartbeat. Seek medical attention if these occur.")
+    st.write("• This is not medication dosing advice. Always follow your healthcare provider’s instructions.")
+    st.write("• Hyperglycemia warning signs may include: frequent urination, excessive thirst, fatigue, blurred vision, headache, nausea. If persistent, consult your doctor.")
+
 
 tabs = st.tabs(["1) Profile", "2) 7-Day Plan", "3) Daily Check-In", "4) Log Glucose", "5) Dashboard"])
 
