@@ -12,6 +12,7 @@ from sqlalchemy import (
 from sqlalchemy.sql import select, insert, update
 from sqlalchemy.pool import NullPool
 
+
 def _get_db_url() -> str:
     url = os.getenv("DATABASE_URL", "").strip()
     if not url:
@@ -22,7 +23,9 @@ def _get_db_url() -> str:
             pass
     return url
 
+
 def _clean_db_url(url: str) -> str:
+    """Strip Supabase pgbouncer param and normalise scheme for psycopg3."""
     if not url:
         return url
     url = re.sub(r"[?&]pgbouncer=[^&]*", "", url)
@@ -35,7 +38,9 @@ def _clean_db_url(url: str) -> str:
         pass
     return url
 
+
 _engine = None
+
 
 def get_engine():
     global _engine
@@ -50,14 +55,19 @@ def get_engine():
             )
     return _engine
 
+
 metadata = MetaData()
 
-# NOTE: Column names here match what exists in the Supabase database.
-#       The primary user identifier column is "user_id" in the DB.
+# All three tables use "user_key" consistently.
+# If your Supabase tables were created with a different name, DROP them and
+# let init_db() recreate them via the SQL Editor:
+#   DROP TABLE IF EXISTS daily_checkins;
+#   DROP TABLE IF EXISTS glucose_logs;
+#   DROP TABLE IF EXISTS profiles;
 
 profiles = Table(
     "profiles", metadata,
-    Column("user_id", String(80), primary_key=True),   # was user_key
+    Column("user_key", String(80), primary_key=True),
     Column("full_name", String(200), nullable=True),
     Column("phone_last4", String(8), nullable=True),
     Column("age", Integer, nullable=True),
@@ -75,7 +85,7 @@ profiles = Table(
 glucose_logs = Table(
     "glucose_logs", metadata,
     Column("id", Integer, primary_key=True, autoincrement=True),
-    Column("user_id", String(80), nullable=False),     # was user_key
+    Column("user_key", String(80), nullable=False),
     Column("measured_at", DateTime, nullable=False),
     Column("logged_at", DateTime, nullable=False),
     Column("reading_type", String(40), nullable=False),
@@ -86,20 +96,22 @@ glucose_logs = Table(
 daily_checkins = Table(
     "daily_checkins", metadata,
     Column("id", Integer, primary_key=True, autoincrement=True),
-    Column("user_id", String(80), nullable=False),     # was user_key
+    Column("user_key", String(80), nullable=False),
     Column("checkin_date", Date, nullable=False),
     Column("followed_plan", Integer, nullable=False),
     Column("actual_meals", Text, nullable=True),
     Column("created_at", DateTime, nullable=False),
 )
 
+
 def init_db() -> None:
     metadata.create_all(get_engine())
+
 
 def get_profile(user_key: str) -> Optional[Dict]:
     with get_engine().begin() as conn:
         row = conn.execute(
-            select(profiles).where(profiles.c.user_id == user_key)
+            select(profiles).where(profiles.c.user_key == user_key)
         ).fetchone()
     if not row:
         return None
@@ -109,6 +121,7 @@ def get_profile(user_key: str) -> Optional[Dict]:
     except Exception:
         d["family_history"] = []
     return d
+
 
 def upsert_profile(user_key: str, data: Dict) -> None:
     now = datetime.now()
@@ -131,17 +144,18 @@ def upsert_profile(user_key: str, data: Dict) -> None:
 
     with get_engine().begin() as conn:
         exists = conn.execute(
-            select(profiles.c.user_id).where(profiles.c.user_id == user_key)
+            select(profiles.c.user_key).where(profiles.c.user_key == user_key)
         ).fetchone()
 
         if exists:
             conn.execute(
-                update(profiles).where(profiles.c.user_id == user_key).values(**payload)
+                update(profiles).where(profiles.c.user_key == user_key).values(**payload)
             )
         else:
-            payload["user_id"] = user_key
+            payload["user_key"] = user_key
             payload["created_at"] = now
             conn.execute(insert(profiles).values(**payload))
+
 
 def add_glucose_log(
     user_key: str,
@@ -152,13 +166,14 @@ def add_glucose_log(
 ) -> None:
     with get_engine().begin() as conn:
         conn.execute(insert(glucose_logs).values(
-            user_id=user_key,
+            user_key=user_key,
             measured_at=measured_at,
             logged_at=datetime.now(),
             reading_type=reading_type,
             value=float(value),
             meal_note=meal_note or None,
         ))
+
 
 def fetch_glucose_logs(user_key: str) -> List[Tuple[str, str, float, str]]:
     with get_engine().begin() as conn:
@@ -169,10 +184,11 @@ def fetch_glucose_logs(user_key: str) -> List[Tuple[str, str, float, str]]:
                 glucose_logs.c.value,
                 glucose_logs.c.meal_note,
             )
-            .where(glucose_logs.c.user_id == user_key)
+            .where(glucose_logs.c.user_key == user_key)
             .order_by(glucose_logs.c.measured_at)
         ).fetchall()
     return [(r[0].isoformat(), r[1], float(r[2]), r[3] or "") for r in rows]
+
 
 def add_daily_checkin(
     user_key: str,
@@ -182,12 +198,13 @@ def add_daily_checkin(
 ) -> None:
     with get_engine().begin() as conn:
         conn.execute(insert(daily_checkins).values(
-            user_id=user_key,
+            user_key=user_key,
             checkin_date=checkin_date,
             followed_plan=1 if followed_plan else 0,
             actual_meals=actual_meals or None,
             created_at=datetime.now(),
         ))
+
 
 def fetch_checkins(user_key: str) -> List[Tuple[str, int, str]]:
     with get_engine().begin() as conn:
@@ -197,7 +214,7 @@ def fetch_checkins(user_key: str) -> List[Tuple[str, int, str]]:
                 daily_checkins.c.followed_plan,
                 daily_checkins.c.actual_meals,
             )
-            .where(daily_checkins.c.user_id == user_key)
+            .where(daily_checkins.c.user_key == user_key)
             .order_by(daily_checkins.c.checkin_date)
         ).fetchall()
     return [(r[0].isoformat(), int(r[1]), r[2] or "") for r in rows]
