@@ -11,16 +11,39 @@ from sqlalchemy import (
 from sqlalchemy.sql import select, insert, update
 from sqlalchemy.pool import NullPool
 
-DB_URL = os.getenv("DATABASE_URL", "").strip()
+def _get_db_url() -> str:
+    # 1) env var (local / cloud)
+    url = os.getenv("DATABASE_URL", "").strip()
 
-# If DATABASE_URL exists -> persistent Postgres (Supabase). Otherwise -> local SQLite (dev).
-if DB_URL:
-    # NullPool is safest with Supabase pooler/pgbouncer and Streamlit reruns
-    engine = create_engine(DB_URL, pool_pre_ping=True, poolclass=NullPool)
-else:
-    engine = create_engine("sqlite:///data.db", connect_args={"check_same_thread": False})
+    # 2) Streamlit secrets (Streamlit Cloud)
+    if not url:
+        try:
+            import streamlit as st
+            url = str(st.secrets.get("DATABASE_URL", "")).strip()
+        except Exception:
+            pass
+
+    return url
+
+_engine = None
+
+def get_engine():
+    global _engine
+    if _engine is None:
+        db_url = _get_db_url()
+
+        if db_url:
+            _engine = create_engine(db_url, pool_pre_ping=True, poolclass=NullPool)
+        else:
+            _engine = create_engine("sqlite:///data.db", connect_args={"check_same_thread": False})
+
+    return _engine
 
 metadata = MetaData()
+
+def init_db() -> None:
+    metadata.create_all(get_engine())
+
 
 # Stores user profile data (keyed by a hashed phone “user_key”)
 profiles = Table(
