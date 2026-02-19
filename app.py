@@ -1,16 +1,35 @@
 import os
+import re
+import hashlib
 from datetime import datetime, date
 from typing import List, Optional
 
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
-import re, hashlib
 
 from config import APP, CARB, TRIAGE
 from triage import triage_profile
 from planner import generate_week_plan
 from llm import generate_swaps, coach_on_actual_meal
+
+st.set_page_config(page_title=APP["title"], layout="wide")
+
+# ---- Load secrets FIRST (so storage.py sees DATABASE_URL at import time) ----
+def _sget(key: str, default: str = "") -> str:
+    try:
+        return str(st.secrets.get(key, default)).strip()
+    except Exception:
+        return default
+
+os.environ["GROQ_API_KEY"] = _sget("GROQ_API_KEY", os.getenv("GROQ_API_KEY", ""))
+os.environ["GROQ_BASE_URL"] = _sget("GROQ_BASE_URL", os.getenv("GROQ_BASE_URL", "https://api.groq.com/openai/v1"))
+os.environ["GROQ_MODEL"] = _sget("GROQ_MODEL", os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"))
+
+os.environ["DATABASE_URL"] = _sget("DATABASE_URL", os.getenv("DATABASE_URL", ""))
+os.environ["PHONE_SALT"] = _sget("PHONE_SALT", os.getenv("PHONE_SALT", "dev-salt-change-me"))
+
+# ---- Now import storage (after env is ready) ----
 from storage import (
     init_db,
     get_profile,
@@ -21,20 +40,8 @@ from storage import (
     fetch_checkins,
 )
 
-st.set_page_config(page_title=APP["title"], layout="wide")
-
-# Load Streamlit Secrets → environment variables (for Groq)
-os.environ["GROQ_API_KEY"] = st.secrets.get("GROQ_API_KEY", os.getenv("GROQ_API_KEY", ""))
-os.environ["GROQ_BASE_URL"] = st.secrets.get(
-    "GROQ_BASE_URL",
-    os.getenv("GROQ_BASE_URL", "https://api.groq.com/openai/v1")
-)
-os.environ["GROQ_MODEL"] = st.secrets.get(
-    "GROQ_MODEL",
-    os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
-)
-
 init_db()
+
 
 # -------------------------
 # Header + Disclaimer
