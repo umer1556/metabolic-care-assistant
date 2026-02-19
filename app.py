@@ -390,25 +390,24 @@ with tabs[1]:
 
         st.success("✅ Profile saved! Your plan has been updated.")
 
-    if "triage_level" in st.session_state:
-        level = st.session_state["triage_level"]
-        flags = st.session_state.get("triage_flags", [])
-        emoji = TRIAGE_EMOJI.get(level, "")
+  if "triage_level" in st.session_state:
+    level = st.session_state["triage_level"]
+    flags = st.session_state.get("triage_flags", [])
+    emoji = TRIAGE_EMOJI.get(level, "")
 
-        if level == "GREEN":
-            st.success(f"{emoji} **All clear** — Your readings look stable. All features are unlocked.")
-       elif level == "AMBER":
-           st.warning(f"{emoji} **Proceed with care** — You can use the app, but we strongly recommend discussing your plan with a clinician.")
-       else:
-            st.error(f"{emoji} **Please see a clinician** — Your current readings suggest this app alone isn't enough. Please seek professional medical advice before making dietary changes.")
+    if level == "GREEN":
+        st.success(f"{emoji} **All clear** — Your readings look stable. All features are unlocked.")
+    elif level == "AMBER":
+        st.warning(f"{emoji} **Proceed with care** — You can use the app, but we strongly recommend discussing your plan with a clinician.")
+    else:
+        st.error(f"{emoji} **Please see a clinician** — Your current readings suggest this app alone isn't enough. Please seek professional medical advice before making dietary changes.")
 
-        if flags:
-            for f in flags:
-                st.write("•", f)
+    if flags:
+        for f in flags:
+            st.write("•", f)
 
-        if family_history:
-            st.info(f"📋 Family history noted: {', '.join(family_history)}. This tool supports habit-building; follow clinician guidance for specific targets.")
-
+    if family_history:
+        st.info(f"📋 Family history noted: {', '.join(family_history)}. This tool supports habit-building; follow clinician guidance for specific targets.")
 # -------------------------
 # TAB 2 — Daily Check-In
 # -------------------------
