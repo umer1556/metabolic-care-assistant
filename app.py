@@ -123,7 +123,7 @@ _render_sidebar()
 if "user_key" not in st.session_state:
     st.title("🩺 " + APP["title"])
     st.markdown("#### Your personal metabolic health companion.")
-    st.caption("🔒 Private & secure — your phone number is never stored.")
+    st.caption("🔒 Private & secure.")
 
     col1, col2 = st.columns([1, 1])
     with col1:
