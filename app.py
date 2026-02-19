@@ -54,35 +54,35 @@ def _parse_recent_fastings(vals: List[float]) -> List[float]:
 with tabs[0]:
     st.subheader("Create profile + eligibility (Green / Amber / Red)")
 
-   name = st.text_input("Name", value=st.session_state.get("name", ""))
-age = st.number_input("Age", min_value=1, max_value=120, value=int(st.session_state.get("age", 25)))
+    name = st.text_input("Name", value=st.session_state.get("name", ""))
+    age = st.number_input("Age", min_value=1, max_value=120, value=int(st.session_state.get("age", 25)))
 
-gender = st.selectbox(
-    "Gender (optional)",
-    ["Prefer not to say", "Male", "Female", "Other"],
-    index=0
-)
+    gender = st.selectbox(
+        "Gender (optional)",
+        ["Prefer not to say", "Male", "Female", "Other"],
+        index=0
+    )
 
-col_hw1, col_hw2 = st.columns(2)
-with col_hw1:
-    height_cm = st.number_input("Height (cm) (optional)", min_value=0, max_value=250, value=0)
-with col_hw2:
-    weight_kg = st.number_input("Weight (kg) (optional)", min_value=0.0, max_value=400.0, value=0.0, step=0.5)
+    col_hw1, col_hw2 = st.columns(2)
+    with col_hw1:
+        height_cm = st.number_input("Height (cm) (optional)", min_value=0, max_value=250, value=0)
+    with col_hw2:
+        weight_kg = st.number_input("Weight (kg) (optional)", min_value=0.0, max_value=400.0, value=0.0, step=0.5)
 
-family_history = st.multiselect(
-    "Family history (optional)",
-    ["Diabetes", "Hypertension", "High cholesterol", "Heart disease"],
-    default=[]
-)
+    family_history = st.multiselect(
+        "Family history (optional)",
+        ["Diabetes", "Hypertension", "High cholesterol", "Heart disease"],
+        default=[]
+    )
 
-diabetes_type = st.selectbox("Diabetes type", ["Type 1", "Type 2", "Not sure"], index=1)
+    diabetes_type = st.selectbox("Diabetes type", ["Type 1", "Type 2", "Not sure"], index=1)
 
-# Optional BMI (informational only)
-bmi = None
-if height_cm > 0 and weight_kg > 0:
-    h_m = height_cm / 100.0
-    bmi = weight_kg / (h_m * h_m)
-    st.caption(f"Estimated BMI (informational only): {bmi:.1f}")
+    bmi = None
+    if height_cm > 0 and weight_kg > 0:
+        h_m = height_cm / 100.0
+        bmi = weight_kg / (h_m * h_m)
+        st.caption(f"Estimated BMI (informational only): {bmi:.1f}")
+
 
     st.markdown("### Optional conditions")
     c1, c2, c3 = st.columns(3)
