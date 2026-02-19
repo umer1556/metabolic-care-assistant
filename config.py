@@ -35,7 +35,7 @@ CARB = {
 }
 
 APP = {
-    "title": "Metabolic Care Assistant (Prototype)",
+    "title": "Metabolic Care Assistant",
     "disclaimer": (
         "Educational support tool only. Not medical advice. "
         "Does not diagnose, prescribe, or replace clinician care. "
