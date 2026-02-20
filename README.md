@@ -290,7 +290,7 @@ Built at the **HEC Generative AI Hackathon** by:
 | Muhammed Umer | [@umer1556](https://github.com/umer1556) |
 | Zunaira Hawar | [@zunairakhan123](https://github.com/zunairakhan123) |
 | Jaisha Khan | [@jaishakhan](https://github.com/jaishakhan) |
-| [Name 4] | [@username](https://github.com/username) |
+| Muhammad Husnain | [@MuhammadHusnain572](https://github.com/MuhammadHusnain572) |
 | [Name 5] | [@username](https://github.com/username) |
 
 ---
