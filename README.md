@@ -291,7 +291,7 @@ Built at the **HEC Generative AI Hackathon** by:
 | Zunaira Hawar | [@zunairakhan123](https://github.com/zunairakhan123) |
 | Jaisha Khan | [@jaishakhan](https://github.com/jaishakhan) |
 | Muhammad Husnain | [@MuhammadHusnain572](https://github.com/MuhammadHusnain572) |
-| [Name 5] | [@username](https://github.com/username) |
+| Dr.Fatima Farhat | [@docffarhat-prog](https://github.com/docffarhat-prog) |
 
 ---
 
